@@ -1,0 +1,7 @@
+[project]
+name = "test_suite"
+version = "1"
+
+[tracking]
+headers = ["tests/fixtures/simple_struct.h"]
+compile_commands = ""
