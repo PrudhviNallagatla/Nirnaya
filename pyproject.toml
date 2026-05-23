@@ -1,6 +1,6 @@
 [project]
 name = "nirnaya"
-version = "0.0.0"
+version = "0.1.0"
 requires-python = ">=3.11"
 description = "C++ interface contract verification tool"
 readme = "README.md"
