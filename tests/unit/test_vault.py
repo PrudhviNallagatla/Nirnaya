@@ -11,7 +11,7 @@ def test_vault_initialization_and_flow(tmp_path: Path):
     """Verifies layout creation, template configuration, and archiving cycles."""
     # Initialize vault
     vault = StorageVault.initialize(tmp_path, "test_project")
-    
+
     assert vault.config_path.exists()
     assert vault.blueprint_dir.exists()
     assert vault.history_dir.exists()
@@ -25,10 +25,10 @@ def test_vault_initialization_and_flow(tmp_path: Path):
     model = BlueprintModel(
         header_path="include/core.h",
         captured_at=datetime(2026, 5, 22, 12, 0, 0),
-        nirnaya_version="0.1.0"
+        nirnaya_version="0.1.0",
     )
     vault.save_blueprint(model)
-    
+
     # Reload validation check
     loaded = vault.load_blueprint("include/core.h")
     assert loaded.header_path == "include/core.h"
@@ -37,7 +37,7 @@ def test_vault_initialization_and_flow(tmp_path: Path):
     updated_model = BlueprintModel(
         header_path="include/core.h",
         captured_at=datetime(2026, 5, 22, 13, 0, 0),
-        nirnaya_version="0.1.0"
+        nirnaya_version="0.1.0",
     )
     vault.save_blueprint(updated_model)
 
@@ -45,3 +45,53 @@ def test_vault_initialization_and_flow(tmp_path: Path):
     archive_dir = vault.history_dir / "include__core.h"
     assert archive_dir.exists()
     assert len(list(archive_dir.glob("*.json"))) == 1
+
+
+def test_track_headers_normalizes_absolute_paths(tmp_path: Path):
+    """Absolute header paths should be stored as repository-relative entries."""
+    vault = StorageVault.initialize(tmp_path, "test_project")
+
+    header = tmp_path / "include" / "api.h"
+    header.parent.mkdir(parents=True)
+    header.touch()
+
+    vault.track_headers([str(header)])
+
+    assert vault.get_tracked_headers() == ["include/api.h"]
+
+
+def test_missing_config_returns_empty_headers_and_track_noops(tmp_path: Path):
+    """Missing config should degrade safely for read and write helpers."""
+    vault = StorageVault(tmp_path)
+
+    assert vault.get_tracked_headers() == []
+
+    vault.track_headers(["include/api.h"])
+
+    assert not vault.config_path.exists()
+
+
+def test_save_blueprint_archives_corrupt_existing_snapshot(tmp_path: Path):
+    """A corrupt active snapshot should still be archived and replaced."""
+    vault = StorageVault.initialize(tmp_path, "test_project")
+
+    model = BlueprintModel(
+        header_path="include/core.h",
+        captured_at=datetime(2026, 5, 22, 12, 0, 0),
+        nirnaya_version="0.1.0",
+    )
+    vault.save_blueprint(model)
+
+    active_target = vault.blueprint_dir / "include__core.h.json"
+    active_target.write_text("not-json", encoding="utf-8")
+
+    updated_model = BlueprintModel(
+        header_path="include/core.h",
+        captured_at=datetime(2026, 5, 22, 13, 0, 0),
+        nirnaya_version="0.1.0",
+    )
+    vault.save_blueprint(updated_model)
+
+    archive_dir = vault.history_dir / "include__core.h"
+    assert archive_dir.exists()
+    assert len(list(archive_dir.glob("*.json"))) >= 1

@@ -1,0 +1,96 @@
+{
+  "header_path": "D:\\all_codes\\Nirnaya\\tests\\fixtures\\cpp_class.h",
+  "captured_at": "2026-05-23T05:18:15.129944",
+  "nirnaya_version": "0.1.0",
+  "structs": [
+    {
+      "name": "network::ConnectionManager",
+      "size_bytes": 1,
+      "fields": [
+        {
+          "name": "m_socket_fd",
+          "type_spelling": "int32_t",
+          "offset_bits": null,
+          "is_public": false
+        },
+        {
+          "name": "m_is_authenticated",
+          "type_spelling": "bool",
+          "offset_bits": null,
+          "is_public": false
+        },
+        {
+          "name": "m_timeout_seconds",
+          "type_spelling": "double",
+          "offset_bits": null,
+          "is_public": false
+        }
+      ],
+      "methods": [
+        {
+          "name": "connect",
+          "return_type": "bool",
+          "parameters": [
+            {
+              "name": "host",
+              "type_spelling": "const std::string &"
+            },
+            {
+              "name": "port",
+              "type_spelling": "int"
+            }
+          ],
+          "is_virtual": true,
+          "is_const": false,
+          "is_static": false
+        },
+        {
+          "name": "disconnect",
+          "return_type": "void",
+          "parameters": [],
+          "is_virtual": false,
+          "is_const": false,
+          "is_static": false
+        },
+        {
+          "name": "get_active_connection_count",
+          "return_type": "int",
+          "parameters": [],
+          "is_virtual": false,
+          "is_const": false,
+          "is_static": true
+        },
+        {
+          "name": "is_connected",
+          "return_type": "bool",
+          "parameters": [],
+          "is_virtual": false,
+          "is_const": true,
+          "is_static": false
+        }
+      ],
+      "is_class": true
+    }
+  ],
+  "free_functions": [
+    {
+      "name": "network::broadcast_payload",
+      "return_type": "void",
+      "parameters": [
+        {
+          "name": "payload",
+          "type_spelling": "const std::string &"
+        },
+        {
+          "name": "channel_flags",
+          "type_spelling": "int"
+        }
+      ],
+      "is_virtual": false,
+      "is_const": false,
+      "is_static": false
+    }
+  ],
+  "enums": [],
+  "typedefs": []
+}

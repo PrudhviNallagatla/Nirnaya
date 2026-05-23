@@ -7,7 +7,7 @@ review layout anomalies, and refresh baseline snapshots interactively.
 
 from pathlib import Path
 from textual.app import App, ComposeResult
-from textual.containers import Container, Vertical, Center, Middle
+from textual.containers import Container, Vertical
 from textual.widgets import Header, Footer, Static
 from textual.screen import ModalScreen
 
@@ -177,7 +177,9 @@ class ContractDashboard(App):
         if sidebar.children:
             sidebar.index = 0
             # Force trigger the view loading pipeline manually
-            self._update_details_pane(sidebar.children[0].name)
+            first_name = sidebar.children[0].name
+            if first_name:
+                self._update_details_pane(first_name)
 
     def compose(self) -> ComposeResult:
         """Constructs active visual frame layout zones using modular widgets."""

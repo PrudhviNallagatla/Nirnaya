@@ -1,55 +1,56 @@
 # nirnaya/context/discovery.py
-"""Automated workspace header file discovery engine.
+"""Automated workspace header file discovery tracking engine.
 
-Crawls directory hierarchies to isolate and inventory public C/C++ interface
-headers for contract assignment.
+Recursively scans a project workspace directory tree to automatically harvest 
+public C++ header configurations while gracefully skipping internal build artifacts.
 """
 
-from pathlib import Path
-from typing import List, Set
+from __future__ import annotations
 
+from pathlib import Path
+from typing import Set
 
 class HeaderDiscovery:
-    """Provides file-system crawling mechanics to find trackable public header files."""
+    """Recursively walks a workspace directory tree to discover trackable headers."""
 
-    def __init__(self, root_dir: Path):
-        self.root_dir = Path(root_dir).resolve()
-        
-        # Standard structural ignore patterns to avoid massive, unrelated scans
-        self.ignored_directories: Set[str] = {
+    def __init__(self, workspace_root: Path):
+        self.root = Path(workspace_root).resolve()
+        # Common build, cache, and dependency folders to ignore
+        self.ignored_dirs: Set[str] = {
             ".git",
-            ".github",
-            ".nirnaya",
+            ".venv",
+            "venv",
             "build",
             "out",
             "target",
-            "node_modules",
-            "vcpkg_installed",
-            ".venv",
-            "venv",
+            "bin",
+            "obj",
+            ".nirnaya",
+            "__pycache__",
+            ".pytest_cache",
+            ".mypy_cache"
         }
-        
-        # Valid canonical C/C++ header extensions
-        self.valid_extensions: Set[str] = {".h", ".hpp", ".hxx", ".hh", ".inl"}
+        # C++ header file extensions we care about
+        self.header_extensions: Set[str] = {".h", ".hpp", ".hxx", ".hh"}
 
-    def discover_public_headers(self) -> List[Path]:
-        """Scans the repository path recursively, collecting all viable C++ headers."""
-        discovered_paths: List[Path] = []
-        self._crawl(self.root_dir, discovered_paths)
-        return sorted(discovered_paths)
+    def discover_public_headers(self) -> list[Path]:
+        """Crawls the workspace tree and returns a list of absolute header paths."""
+        discovered: list[Path] = []
+        self._crawl(self.root, discovered)
+        return sorted(discovered)
 
-    def _crawl(self, current_dir: Path, accumulator: List[Path]) -> None:
-        """Recursively traverses directories while strictly enforcing ignore limits."""
+    def _crawl(self, current_dir: Path, accumulator: list[Path]) -> None:
+        """Recursive helper that avoids stepping into blacklisted directories."""
         try:
             for item in current_dir.iterdir():
+                if item.is_symlink():  # skip all symlinks to prevent loop cycles
+                    continue
                 if item.is_dir():
-                    # Skip matching build folders or internal tracking repositories
-                    if item.name in self.ignored_directories:
+                    if item.name in self.ignored_dirs:
                         continue
                     self._crawl(item, accumulator)
                 elif item.is_file():
-                    if item.suffix.lower() in self.valid_extensions:
-                        accumulator.append(item)
+                    if item.suffix.lower() in self.header_extensions:
+                        accumulator.append(item.resolve())
         except PermissionError:
-            # Gracefully handle restricted systems folders or locked directories
             pass

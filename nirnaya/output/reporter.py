@@ -1,7 +1,7 @@
 # nirnaya/output/reporter.py
 """Rich-based terminal reporter for Nirnaya layout verification audits.
 
-Renders clear, beautiful visual alerts for contract states, severe 
+Renders clear, beautiful visual alerts for contract states, severe
 ABI violations, and suggested structural code mitigations.
 """
 
@@ -35,11 +35,13 @@ class TerminalReporter:
     def report_violations(self, header_path: str, violations: List[Violation]) -> None:
         """Formats and presents detected layout drift anomalies as clear, scannable data."""
         if not violations:
-            self.print_success(f"All contracts verified for: [cyan]{header_path}[/cyan]")
+            self.print_success(
+                f"All contracts verified for: [cyan]{header_path}[/cyan]"
+            )
             return
 
         self.console.print("\n" + "─" * 80)
-        self.console.print(f"[bold red]ABI CONTRACT VIOLATIONS DETECTED[/bold red]")
+        self.console.print("[bold red]ABI CONTRACT VIOLATIONS DETECTED[/bold red]")
         self.console.print(f"Target Header: [cyan]{header_path}[/cyan]\n")
 
         table = Table(box=None, padding=(0, 2, 1, 0), show_header=True)
@@ -60,20 +62,22 @@ class TerminalReporter:
             details_text = Text()
             details_text.append(f"Entity: {v.entity_name}\n", style="bold white")
             details_text.append(f"{v.description}\n", style="italic")
-            
+
             if v.old_value or v.new_value:
-                details_text.append(f"  └─ Baseline State: ", style="dim")
+                details_text.append("  └─ Baseline State: ", style="dim")
                 details_text.append(f"{v.old_value}\n", style="red")
-                details_text.append(f"  └─ Modified State: ", style="dim")
+                details_text.append("  └─ Modified State: ", style="dim")
                 details_text.append(f"{v.new_value}\n", style="green")
 
             if v.suggested_fix:
-                details_text.append(f"  💡 Suggested Fix: {v.suggested_fix}", style="cyan")
+                details_text.append(
+                    f"  💡 Suggested Fix: {v.suggested_fix}", style="cyan"
+                )
 
             table.add_row(sev_text, v.category, details_text)
 
         self.console.print(table)
-        
+
         breaking_count = sum(1 for v in violations if v.severity == "breaking")
         self.console.print(
             Panel(
@@ -81,7 +85,7 @@ class TerminalReporter:
                 f"Discovered [bold]{len(violations)}[/bold] total anomalies. "
                 f"([bold red]{breaking_count} breaking layout shifts[/bold red])",
                 border_style="red",
-                expand=False
+                expand=False,
             )
         )
         self.console.print("─" * 80 + "\n")

@@ -1,0 +1,27 @@
+{
+  "header_path": "D:\\all_codes\\Nirnaya\\tests\\fixtures\\enums.h",
+  "captured_at": "2026-05-23T05:09:13.336498",
+  "nirnaya_version": "0.1.0",
+  "structs": [],
+  "free_functions": [],
+  "enums": [
+    {
+      "name": "data::StatusSeverity",
+      "values": {
+        "SEVERITY_ERROR": 10,
+        "SEVERITY_FATAL": 100,
+        "SEVERITY_INFO": 0,
+        "SEVERITY_WARNING": 1
+      }
+    },
+    {
+      "name": "data::StorageFormat",
+      "values": {
+        "COMPRESSED_ZSTD": 90,
+        "JSON_STRING": 74,
+        "RAW_BINARY": 66
+      }
+    }
+  ],
+  "typedefs": []
+}

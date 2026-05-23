@@ -1,11 +1,16 @@
-# nirnaya ⚖️
+# Nirnaya 
 
-> **निर्णय** (Sanskrit) — *verdict, decision, determination*
+> **निर्णय** (Sanskrit), **నిర్ణయ** (Telugu) — *verdict, decision, determination*
 
 A lightweight, git-native **C++ interface contract engine**. Nirnaya tracks the structural shape of your C++ headers and tells you — loudly and clearly — when something breaks the ABI contract, before it breaks your users.
 
 No compiled binaries. No debug symbols. No XML config hell. Just source.
 
+> Nirnaya is a personal project built to solve problems encountered while managing C++ libraries: catching silent, runtime-crashing ABI layout slips before they hit consumer binaries. I hope its helpful for as many people as possible.
+
+<!-- ![Clones](https://raw.githubusercontent.com/PrudhviNallagatla/Nirnaya/traffic/badges/clones.svg)
+
+[![Installs](https://img.shields.io/badge/installs-2k%2Fmonth-brightgreen?style=flat-square)](https://github.com/PrudhviNallagatla/Nirnaya) -->
 ---
 
 ## The Problem
@@ -16,36 +21,52 @@ Standard tooling won't catch this. `nirnaya` will.
 
 ---
 
+## When to Use Nirnaya
+
+- You maintain a C++ shared library and need to catch ABI breaks before release
+- Your CI needs to fail when a header's memory layout changes unexpectedly  
+- You want to commit interface contracts to git like source code
+- You ship headers to consumers and cannot break binary compatibility
+
+---
+
 ## How It Works
 
 ```
 nirnaya init
-  └─► Parses your headers via libclang
-  └─► Extracts the structural AST (functions, structs, enums, templates)
-  └─► Saves a JSON "Golden Blueprint" to .nirnaya/
+└─► Automatically crawls your workspace for public C++ headers
+└─► Extracts the structural AST via libclang (offsets, sizes, qualifiers)
+└─► Saves a deterministic JSON "Golden Blueprint" to .nirnaya/
 
-nirnaya check  (run locally or on every PR)
-  └─► Re-parses the current headers
-  └─► Diffs against the saved blueprint
-  └─► Passes silently or fails loudly with exact diagnostics
+nirnaya check  (run locally or integrate into your PR pipelines)
+└─► Re-parses the current headers
+└─► Diffs layout shapes against your saved blueprint
+└─► Passes silently or fails loudly with exact diagnostic readouts
 ```
 
 ---
 
 ## Quick Start
 
+### Requirements
+To execute the engine, ensure your local path context has **Python 3.11+** and the **LLVM/libclang** system binaries available:
+* **Ubuntu/Debian:** `sudo apt install libclang-dev`
+* **macOS:** `brew install llvm`
+* **Windows:** Install the official pre-compiled LLVM binaries via the [LLVM Release Portal](https://github.com/llvm/llvm-project/releases).
+  
 ```bash
-pip install nirnaya
+# 1. Install directly from GitHub (No PyPI registry required!)
+pip install git+https://github.com/PrudhviNallagatla/Nirnaya.git
 
+# 2. Lock down your public headers automatically with zero-config scanning
 cd your-cpp-project
-nirnaya init include/interface.h
+nirnaya init
 
-# ... someone edits interface.h ...
+# ... someone introduces a structural layout change ...
 
+# 3. Audit your interface contract stability bounds
 nirnaya check
 ```
-
-That's it.
 
 ---
 
@@ -54,24 +75,37 @@ That's it.
 When a contract is clean:
 
 ```
-✅ All contracts verified. (3 headers, 0 violations) [12ms]
+✅ All public interface layout commitments verified perfectly.
+
 ```
 
 When something drifts:
 
 ```
-❌ CONTRACT VIOLATION: Structural drift detected in 'include/interface.h'
+────────────────────────────────────────────────────────────────────────────────
+ABI CONTRACT VIOLATIONS DETECTED
+Target Header: include/interface.h
 
-  Struct: NetworkPacket
-  [-] Size: 32 bytes
-  [+] Size: 40 bytes
+Severity      Category             Details
+                                                                                
+BREAKING      struct_layout        Entity: NetworkPacket
+                                   Type memory footprint size shifted from 24 to 32 bytes.
+                                   This breaks binary packaging structures.
+                                     └─ Baseline State: 24 bytes
+                                     └─ Modified State: 32 bytes
+                                                                                
+BREAKING      struct_layout        Entity: NetworkPacket::timestamp
+                                   Field member 'timestamp' memory offset drifted from 
+                                   bit 32 to bit 64. Spills alignment corruption to 
+                                   downstream consumers.
+                                     └─ Baseline State: bit 32
+                                     └─ Modified State: bit 64
 
-  Reason: Field 'timestamp' (int64_t) inserted at line 14.
-          Subsequent public member offsets have shifted by 8 bytes.
-          This is an ABI-breaking change.
-
-  Fix:    Revert the field insertion, or run 'nirnaya update' if this
-          is an intentional breaking change (triggers a semver prompt).
+╭──────────────────────────────────────────────────────────╮
+│ Audit Status: FAILED                                     │
+│ Discovered 2 total anomalies. (2 breaking layout shifts) │
+╰──────────────────────────────────────────────────────────╯
+────────────────────────────────────────────────────────────────────────────────
 ```
 
 ---
@@ -79,134 +113,89 @@ When something drifts:
 ## Commands
 
 | Command | Description |
-|---|---|
-| `nirnaya init <header>` | Parse header and save Golden Blueprint |
-| `nirnaya init --all` | Auto-discover and track all public headers |
-| `nirnaya check` | Verify all tracked headers against their blueprints |
-| `nirnaya check <header>` | Check a single header |
-| `nirnaya update` | Acknowledge a breaking change and update the blueprint |
-| `nirnaya show` | Open the TUI dashboard |
-| `nirnaya list` | List all tracked contracts and their status |
-| `nirnaya diff` | Show the raw structural diff of current state vs blueprint |
+| --- | --- |
+| `nirnaya init` | Auto-discover and capture baseline blueprints for all headers |
+| `nirnaya init <header>` | Parse and track an isolated header file explicitly |
+| `nirnaya check` | Verify all tracked headers against their stored baselines |
+| `nirnaya update` | Acknowledge local modifications and advance the baseline blueprint |
+| `nirnaya show` | Open the interactive TUI dashboard panels |
+| `nirnaya version` | Display installation index and engine version details |
 
 ---
 
 ## TUI Shortcuts
 
-Inside `nirnaya show`, use `h` for help, `r` to recheck, `u` to update the current baseline, and `q` to quit. The help overlay also lists `esc` as a dismiss key.
+Inside the `nirnaya show` visual dashboard, use:
+
+* **`r`** : Recheck workspace contracts and catch active drifts live
+* **`u`** : Accept current modifications and refresh the baseline snapshot in-place
+* **`h`** : Toggle the floating interactive key command help overlay panel
+* **`q`** or **`esc`** : Safely close panels or quit the dashboard session
 
 ---
 
 ## Context Awareness
 
-Nirnaya reads your `compile_commands.json` (generated by CMake, Meson, Bazel, or Xmake) to automatically inherit your project's include paths, platform macros, and compiler flags. No manual configuration needed.
+Nirnaya reads your `compile_commands.json` (generated automatically by CMake, Meson, Bazel, or Xmake) to cleanly inherit your project's include paths, platform macros, and compiler flags with zero configuration.
 
 ```bash
 # CMake users
 cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
 
-# Nirnaya will find and read build/compile_commands.json automatically
-nirnaya init include/
+# Nirnaya will automatically find and parse build/compile_commands.json
+nirnaya check
 ```
 
 ---
 
 ## The `.nirnaya/` Vault
 
-Nirnaya stores its blueprints in a lightweight hidden directory at the root of your project:
+Nirnaya stores its blueprints using flat cross-platform path slugifiers at the root of your project:
 
 ```
 .nirnaya/
-├── config.toml          # project-level settings
+├── config.toml                     # Project tracking rules & target headers
 ├── blueprints/
-│   ├── interface.h.json # Golden Blueprint per tracked header
-│   └── network.h.json
-└── history/             # blueprint change log
+│    ├── include__interface.h.json  # Portable absolute path blueprint slugs
+│    └── include__network.h.json
+└── history/
+     └── include__interface.h/      # Timestamped rolling snapshot logs
+          └── 20260522__203000.json
+
 ```
 
-**Commit `.nirnaya/` to git.** This is intentional — the blueprints become part of your repository's contract history, just like any other versioned artifact.
+**Commit `.nirnaya/` to Git.** This is intentional — your interface blueprints become part of your repository's verifiable contract history, just like your source code.
 
 ---
 
-## Installation
+## Running Locally from Source
 
-For local development, create a project-specific virtual environment and install the repo's dependencies from `requirements.txt`:
+To run the engine locally from source or tweak core components using our cross-platform automation scripts:
 
+1. Clone the repository container:
+```bash
+git clone https://github.com/PrudhviNallagatla/Nirnaya.git
+cd Nirnaya
+```
+
+2. Run the automated environment setup script (Initializes Git, configures a standalone local `.venv`, and handles editable link mounts safely):
+```bash
+python bootstrap.py
+```
+
+3. Activate the environment and execute the test pyramid layout rules:
 ```powershell
-py -3.11 -m venv .venv
+# Windows PowerShell
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt -e .
+pytest
+
+# macOS / Linux
+source .venv/bin/activate
+pytest
 ```
-
-Then verify the environment with:
-
-```powershell
-python -m pytest
-```
-
-For end users who just want the CLI, the published package still installs normally:
-
-```bash
-# pip (recommended)
-pip install nirnaya
-
-# pipx (isolated, recommended for CLI tools)
-pipx install nirnaya
-
-# From source
-git clone https://github.com/your-org/nirnaya
-cd nirnaya && pip install -e .
-```
-
-**Requirements:** Python 3.11+, `libclang` system library (see [Installation Guide](docs/installation.md))
-
----
-
-## Optional: LLM-Powered Explanations
-
-When a violation is detected, nirnaya can call an LLM to give you a plain-English explanation and a suggested migration path.
-
-```bash
-nirnaya check --explain          # uses configured backend
-nirnaya check --explain --llm ollama  # local model, no API key needed
-```
-
-Supported backends: Anthropic Claude, OpenAI, Ollama (local). See [LLM Setup](docs/llm.md).
-
----
-
-## Philosophy
-
-- **Source-only.** Never touches your compiled binary.
-- **Zero config for standard projects.** If you have `compile_commands.json`, you're done.
-- **Git-native.** Blueprints live in your repo. Reviews, diffs, blame — all free.
-- **Fail loudly, fix clearly.** Vague errors are useless. Nirnaya tells you exactly what moved, why it matters, and what to do.
-- **Lightweight.** A single Python package. No daemons, no servers, no databases.
-
----
-
-## Roadmap
-
-- [x] Core AST parsing via libclang
-- [x] JSON Golden Blueprint generation
-- [x] Structural diff engine
-- [x] CLI (init / check / update)
-- [x] compile_commands.json context reader
-- [x] TUI dashboard (Textual)
-- [ ] LLM violation explainer (Ollama / Claude / OpenAI)
-- [ ] GitHub Actions official action
-- [ ] VSCode extension
-- [ ] Rust core rewrite (parser + diff engine)
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). The codebase bible lives in [context.md](context.md).
 
 ---
 
 ## License
 
-MIT
+Distributed entirely under the commercial-safe and patent-protective terms of the [Apache License, Version 2.0](https://www.google.com/search?q=LICENSE).

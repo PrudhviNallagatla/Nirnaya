@@ -10,7 +10,6 @@ from typing import Literal, List
 from nirnaya.core.models import (
     BlueprintModel,
     EnumModel,
-    FieldModel,
     FunctionModel,
     StructModel,
     TypedefModel,
@@ -20,6 +19,45 @@ from nirnaya.core.models import (
 
 class BlueprintDiffEngine:
     """Pure structural verification engine to analyze API stability contracts."""
+
+    @staticmethod
+    def _normalize_type_spelling(type_spelling: str) -> str:
+        """Collapse equivalent primitive spellings to reduce alias-only false positives.
+
+        Only normalizes unambiguous integer-width aliases and whitespace. Does NOT
+        strip const or volatile qualifiers because those affect pointer/reference
+        types in ABI-significant ways (e.g. const int* vs int* are distinct types).
+        """
+        # Normalize whitespace around pointer and reference tokens first
+        normalized = " ".join(
+            type_spelling.replace("&", " & ").replace("*", " * ").split()
+        )
+        # Collapse unambiguous primitive aliases only — no qualifier stripping
+        normalized = normalized.replace("int32_t", "int")
+        normalized = normalized.replace("uint32_t", "unsigned int")
+        normalized = normalized.replace("signed int", "int")
+        normalized = normalized.replace("short int", "short")
+        normalized = normalized.replace("unsigned short int", "unsigned short")
+        normalized = normalized.replace("long int", "long")
+        normalized = normalized.replace("unsigned long int", "unsigned long")
+        return normalized.strip()
+
+    @classmethod
+    def _types_equivalent(cls, left: str, right: str) -> bool:
+        return cls._normalize_type_spelling(left) == cls._normalize_type_spelling(right)
+
+    @staticmethod
+    def _sig_key(f: FunctionModel) -> str:
+        """Builds a unique signature key that survives C++ function overloading.
+
+        Using name alone causes overloads to silently overwrite each other in the
+        lookup dict. Including the parameter type list makes each overload distinct.
+        """
+        params = ", ".join(
+            BlueprintDiffEngine._normalize_type_spelling(p.type_spelling)
+            for p in f.parameters
+        )
+        return f"{f.name}({params})"
 
     @staticmethod
     def _violation(
@@ -82,22 +120,21 @@ class BlueprintDiffEngine:
         for name, old_enum in old_map.items():
             if name not in new_map:
                 violations.append(
-                    Violation(
+                    cls._violation(
                         severity="breaking",
                         category="removal",
                         entity_name=name,
                         description=f"Enum '{name}' has been completely removed from the public interface contract.",
-                        old_value=None,
-                        new_value=None,
-                        line_number=None,
-                        suggested_fix=None,
                     )
                 )
                 continue
 
             new_enum = new_map[name]
-            # Check for value drift or value removals
-            for key, old_val in old_enum.values.items():
+
+            # Pass 1: check for removals — iterate old to find constants gone from new.
+            # This pass was accidentally dropped in the previous refactor when the loop
+            # direction was flipped to catch additions; both directions are required.
+            for key in old_enum.values:
                 if key not in new_enum.values:
                     violations.append(
                         cls._violation(
@@ -107,15 +144,28 @@ class BlueprintDiffEngine:
                             description=f"Enum constant '{key}' was removed from enum '{name}'.",
                         )
                     )
-                elif new_enum.values[key] != old_val:
+
+            # Pass 2: check for additions and value drift — iterate new.
+            for key, new_val in new_enum.values.items():
+                if key not in old_enum.values:
+                    violations.append(
+                        cls._violation(
+                            severity="info",
+                            category="enum_value",
+                            entity_name=f"{name}::{key}",
+                            description=f"New enum constant '{key}' added to '{name}'. May break exhaustive switch consumers.",
+                        )
+                    )
+                elif old_enum.values[key] != new_val:
+                    old_val = old_enum.values[key]
                     violations.append(
                         cls._violation(
                             severity="breaking",
                             category="enum_value",
                             entity_name=f"{name}::{key}",
-                            description=f"Enum constant '{key}' value changed from {old_val} to {new_enum.values[key]}.",
+                            description=f"Enum constant '{key}' value changed from {old_val} to {new_val}.",
                             old_value=str(old_val),
-                            new_value=str(new_enum.values[key]),
+                            new_value=str(new_val),
                             suggested_fix="Revert the underlying integer assignment to maintain backward evaluation compatibility.",
                         )
                     )
@@ -143,7 +193,7 @@ class BlueprintDiffEngine:
                 continue
 
             new_td = new_map[name]
-            if old_td.target_type != new_td.target_type:
+            if not cls._types_equivalent(old_td.target_type, new_td.target_type):
                 violations.append(
                     cls._violation(
                         severity="breaking",
@@ -163,31 +213,34 @@ class BlueprintDiffEngine:
         category: Literal["function_signature", "struct_layout"],
         violations: List[Violation],
     ) -> None:
-        old_map = {f.name: f for f in old_list}
-        new_map = {f.name: f for f in new_list}
+        # Key by full signature (name + parameter types) rather than name alone.
+        # Keying on name only causes C++ overloads to silently overwrite each other
+        # in the dict so only the last definition per name ever gets diffed.
+        old_map = {cls._sig_key(f): f for f in old_list}
+        new_map = {cls._sig_key(f): f for f in new_list}
 
-        for name, old_func in old_map.items():
-            if name not in new_map:
+        for sig, old_func in old_map.items():
+            if sig not in new_map:
                 violations.append(
                     cls._violation(
                         severity="breaking",
                         category="removal",
-                        entity_name=name,
-                        description=f"Function signature symbol '{name}' has been removed or renamed.",
+                        entity_name=sig,
+                        description=f"Function '{sig}' has been removed or renamed.",
                     )
                 )
                 continue
 
-            new_func = new_map[name]
+            new_func = new_map[sig]
 
             # Check Return Types
-            if old_func.return_type != new_func.return_type:
+            if not cls._types_equivalent(old_func.return_type, new_func.return_type):
                 violations.append(
                     cls._violation(
                         severity="breaking",
                         category=category,
-                        entity_name=name,
-                        description=f"Function '{name}' return type changed from '{old_func.return_type}' to '{new_func.return_type}'.",
+                        entity_name=sig,
+                        description=f"Function '{sig}' return type changed from '{old_func.return_type}' to '{new_func.return_type}'.",
                         old_value=old_func.return_type,
                         new_value=new_func.return_type,
                     )
@@ -199,8 +252,8 @@ class BlueprintDiffEngine:
                     cls._violation(
                         severity="breaking",
                         category=category,
-                        entity_name=name,
-                        description=f"Function '{name}' const qualifier mismatch.",
+                        entity_name=sig,
+                        description=f"Function '{sig}' const qualifier mismatch.",
                         old_value=f"const={old_func.is_const}",
                         new_value=f"const={new_func.is_const}",
                     )
@@ -212,21 +265,23 @@ class BlueprintDiffEngine:
                     cls._violation(
                         severity="breaking",
                         category=category,
-                        entity_name=name,
-                        description=f"Function '{name}' parameter count drifted from {len(old_func.parameters)} to {len(new_func.parameters)}.",
+                        entity_name=sig,
+                        description=f"Function '{sig}' parameter count drifted from {len(old_func.parameters)} to {len(new_func.parameters)}.",
                     )
                 )
             else:
                 for idx, (old_p, new_p) in enumerate(
                     zip(old_func.parameters, new_func.parameters)
                 ):
-                    if old_p.type_spelling != new_p.type_spelling:
+                    if not cls._types_equivalent(
+                        old_p.type_spelling, new_p.type_spelling
+                    ):
                         violations.append(
                             cls._violation(
                                 severity="breaking",
                                 category=category,
-                                entity_name=name,
-                                description=f"Function '{name}' parameter {idx} type changed from '{old_p.type_spelling}' to '{new_p.type_spelling}'.",
+                                entity_name=sig,
+                                description=f"Function '{sig}' parameter {idx} type changed from '{old_p.type_spelling}' to '{new_p.type_spelling}'.",
                                 old_value=old_p.type_spelling,
                                 new_value=new_p.type_spelling,
                             )
@@ -297,7 +352,9 @@ class BlueprintDiffEngine:
                             new_value=f"bit {new_f.offset_bits}",
                         )
                     )
-                elif old_f.type_spelling != new_f.type_spelling:
+                elif not cls._types_equivalent(
+                    old_f.type_spelling, new_f.type_spelling
+                ):
                     violations.append(
                         cls._violation(
                             severity="breaking",
@@ -309,7 +366,7 @@ class BlueprintDiffEngine:
                         )
                     )
 
-            # 3. Check for unexpected additions inside existing structs that alter fields layout
+            # 3. Check for unexpected additions inside existing structs that alter field layout
             for f_name in new_fields:
                 if f_name not in old_fields:
                     violations.append(

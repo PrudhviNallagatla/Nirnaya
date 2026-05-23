@@ -7,7 +7,7 @@ blueprints from C++ declarations, converting them directly into Pydantic models.
 
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Sequence
 import clang.cindex  # type: ignore
@@ -79,8 +79,7 @@ class HeaderParser:
         # Ensure no catastrophic compiler syntax blocks exist before walking
         for diag in tu.diagnostics:
             if diag.severity >= clang.cindex.Diagnostic.Error:
-                # We log/warn here instead of hard crashing to allow dealing with missing system headers,
-                # but extreme infrastructure issues should be noted by the runner.
+                # logging.warning(f"Clang parse error in {header_path}: {diag.spelling}")
                 pass
 
         # Target absolute matching to filter out nested system includes
@@ -98,7 +97,7 @@ class HeaderParser:
 
         return BlueprintModel(
             header_path=header_path,
-            captured_at=datetime.utcnow(),
+            captured_at=datetime.now(timezone.utc),
             nirnaya_version=__version__,
             structs=structs,
             free_functions=free_functions,
@@ -118,11 +117,18 @@ class HeaderParser:
     ) -> None:
         """Recursively steps through cursors, isolating entities located inside the target file."""
         for child in cursor.get_children():
-            # Filter out tokens originating from standard library headers or external components
-            if (
-                child.location.file
-                and os.path.abspath(child.location.file.name) != target_file
+            # Prefer direct child.location.file, fall back to extent.start.file
+            loc = None
+            if getattr(child, "location", None) and getattr(
+                child.location, "file", None
             ):
+                loc = os.path.abspath(child.location.file.name)
+            elif getattr(child, "extent", None) and getattr(
+                child.extent.start, "file", None
+            ):
+                loc = os.path.abspath(child.extent.start.file.name)
+
+            if loc and loc != target_file:
                 continue
 
             kind = child.kind
@@ -153,8 +159,14 @@ class HeaderParser:
             if kind in (
                 clang.cindex.CursorKind.STRUCT_DECL,
                 clang.cindex.CursorKind.CLASS_DECL,
+                clang.cindex.CursorKind.CLASS_TEMPLATE,
             ):
-                if child.is_definition():
+                # Class templates may present as CLASS_TEMPLATE nodes; treat them
+                # as definitions for the purpose of ABI shape extraction.
+                if (
+                    child.is_definition()
+                    or kind == clang.cindex.CursorKind.CLASS_TEMPLATE
+                ):
                     structs.append(self._parse_struct(child, qualified_name))
                 continue
 
@@ -224,23 +236,28 @@ class string {};
         )
 
     def _field_type_spelling(self, cursor: clang.cindex.Cursor) -> str:
-        tokens = [token.spelling for token in cursor.get_tokens()]
+        # Strip semicolons, then drop the last token (the field name itself),
+        # leaving only the type tokens in their original source order.
+        # This preserves typedef names (e.g. int32_t, MyHandle) as written
+        # rather than resolving to their canonical underlying type like
+        # cursor.type.spelling does.
+        tokens = [t.spelling for t in cursor.get_tokens() if t.spelling != ";"]
         if len(tokens) >= 2:
-            return tokens[0]
-        return cursor.type.spelling
+            return " ".join(tokens[:-1])
+        return cursor.type.spelling  # fallback for edge cases
 
     def _typedef_target_spelling(self, cursor: clang.cindex.Cursor) -> str:
-        tokens = [token.spelling for token in cursor.get_tokens()]
-        if not tokens:
-            return cursor.underlying_typedef_type.spelling
+        # tokens = [token.spelling for token in cursor.get_tokens()]
+        # if not tokens:
+        #     return cursor.underlying_typedef_type.spelling
 
-        if tokens[0] == "typedef" and len(tokens) >= 3:
-            return tokens[1]
+        # if tokens[0] == "typedef" and len(tokens) >= 3:
+        #     return tokens[1]
 
-        if "=" in tokens:
-            equals_index = tokens.index("=")
-            if equals_index + 1 < len(tokens):
-                return tokens[equals_index + 1]
+        # if "=" in tokens:
+        #     equals_index = tokens.index("=")
+        #     if equals_index + 1 < len(tokens):
+        #         return tokens[equals_index + 1]
 
         return cursor.underlying_typedef_type.spelling
 
@@ -252,7 +269,10 @@ class string {};
         methods: List[FunctionModel] = []
 
         # Determine base declaration type
-        is_class = cursor.kind == clang.cindex.CursorKind.CLASS_DECL
+        is_class = cursor.kind in (
+            clang.cindex.CursorKind.CLASS_DECL,
+            clang.cindex.CursorKind.CLASS_TEMPLATE,
+        )
 
         for child in cursor.get_children():
             # Parse Member Fields

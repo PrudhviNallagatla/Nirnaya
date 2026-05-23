@@ -1,43 +1,43 @@
 {
-  "captured_at": "2026-05-23T05:31:21.498787Z",
-  "enums": [],
-  "free_functions": [],
   "header_path": "D:\\all_codes\\Nirnaya\\tests\\fixtures\\simple_struct.h",
+  "captured_at": "2026-05-23T05:09:13.414063",
   "nirnaya_version": "0.1.0",
   "structs": [
     {
+      "name": "core::SimpleStruct",
+      "size_bytes": 24,
       "fields": [
         {
-          "is_public": true,
           "name": "id",
+          "type_spelling": "uint8_t",
           "offset_bits": 0,
-          "type_spelling": "uint8_t"
+          "is_public": true
         },
         {
-          "is_public": true,
           "name": "value",
+          "type_spelling": "int32_t",
           "offset_bits": 32,
-          "type_spelling": "int32_t"
+          "is_public": true
         },
         {
-          "is_public": true,
           "name": "factor",
+          "type_spelling": "double",
           "offset_bits": 64,
-          "type_spelling": "double"
+          "is_public": true
         },
         {
-          "is_public": true,
           "name": "is_active",
+          "type_spelling": "bool",
           "offset_bits": 128,
-          "type_spelling": "bool"
+          "is_public": true
         }
       ],
-      "is_class": false,
       "methods": [],
-      "name": "core::SimpleStruct",
-      "size_bytes": 24
+      "is_class": false
     }
   ],
+  "free_functions": [],
+  "enums": [],
   "typedefs": [
     {
       "name": "core::NetworkToken",
