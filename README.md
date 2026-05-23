@@ -8,9 +8,6 @@ No compiled binaries. No debug symbols. No XML config hell. Just source.
 
 > Nirnaya is a personal project built to solve problems encountered while managing C++ libraries: catching silent, runtime-crashing ABI layout slips before they hit consumer binaries. I hope its helpful for as many people as possible.
 
-<!-- ![Clones](https://raw.githubusercontent.com/PrudhviNallagatla/Nirnaya/traffic/badges/clones.svg)
-
-[![Installs](https://img.shields.io/badge/installs-2k%2Fmonth-brightgreen?style=flat-square)](https://github.com/PrudhviNallagatla/Nirnaya) -->
 ---
 
 ## The Problem
@@ -55,8 +52,8 @@ To execute the engine, ensure your local path context has **Python 3.11+** and t
 * **Windows:** Install the official pre-compiled LLVM binaries via the [LLVM Release Portal](https://github.com/llvm/llvm-project/releases).
   
 ```bash
-# 1. Install directly from GitHub (No PyPI registry required!)
-pip install git+https://github.com/PrudhviNallagatla/Nirnaya.git
+# 1. Install directly from GitHub (PyPI registry will be added later)
+pip install git+https://github.com/PrudhviNallagatla/Nirnaya.git@v0.1.0
 
 # 2. Lock down your public headers automatically with zero-config scanning
 cd your-cpp-project
@@ -67,7 +64,9 @@ nirnaya init
 # 3. Audit your interface contract stability bounds
 nirnaya check
 ```
-
+> Note: Installation via `pip install git+https://github.com/PrudhviNallagatla/Nirnaya.git@v0.1.0` is recommended as it installs the latest stable release.
+> If you want to install the main branch, install via `pip install git+https://github.com/PrudhviNallagatla/Nirnaya.git`.
+> PyPI registry (`pip install nirnaya`) will be added later and will be updated here when its updated.
 ---
 
 ## Sample Output
