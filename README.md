@@ -198,3 +198,43 @@ pytest
 ## License
 
 Distributed entirely under the commercial-safe and patent-protective terms of the [Apache License, Version 2.0](https://www.google.com/search?q=LICENSE).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+This is the first public release of Nirnaya, a git-native C++ interface contract verification tool built to catch ABI layout slips before they hit production.
+
+### Highlights
+
+* **Header-only ABI contract checks:** Uses libclang to extract struct offsets, sizes, and qualifiers directly from your source headers without needing compiled binaries or debug symbols.
+* **Baseline snapshot workflow:** Simple `init`, `check`, and `update` commands to manage your contract state.
+* **Deterministic blueprints:** Saves layout data to clean JSON files so they diff perfectly inside your Git history.
+* **Intelligent type diffs:** Accurately matches equivalent primitive type aliases (like `int32_t` vs `int`) so you don't get false positives.
+* **Compilation database support:** Automatically reads `compile_commands.json` to pick up your existing include paths, macros, and compiler flags.
+* **Interactive TUI dashboard:** Run `nirnaya show` to open a terminal interface for inspecting contract drifts live.
+
+### Packaging & Validation
+
+* Core architecture is fully verified with all unit tests, linting, and type checks passing.
+* Shipped as a Python package with a direct `nirnaya` CLI entrypoint.
+* The distribution wheel explicitly excludes the test suite to keep the install payload fast and lightweight.
+
+---
+
+### Installation
+```bash
+pip install git+https://github.com/PrudhviNallagatla/Nirnaya.git@v0.1.0
+```
